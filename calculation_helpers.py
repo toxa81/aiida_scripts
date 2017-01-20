@@ -25,7 +25,9 @@ def create_calculation_parameters(code, partition, num_ranks_per_node, num_ranks
     print("number of nodes : %i"%num_nodes)
 
     # create dictionary to store parameters
-    params = {} 
+    params = {}
+    
+    params['job_tag'] = "%iN:%iR:%iT @ %s"%(num_nodes, num_ranks_per_node, num_threads, partition)
 
     environment_variables = {'OMP_NUM_THREADS': str(num_threads),\
                              'MKL_NUM_THREADS': str(num_threads),\
@@ -73,7 +75,7 @@ def create_calculation_parameters(code, partition, num_ranks_per_node, num_ranks
 
     return params
 
-def create_calculation(structure, params):
+def create_calculation(structure, params, calc_label, calc_desc):
     """
     Create calculation object from structure and a dictionary of parameters.
     Calculation has to be stored in DB by the caller.
@@ -93,6 +95,8 @@ def create_calculation(structure, params):
     calc.set_environment_variables(params['environment_variables'])
     calc.set_mpirun_extra_params(params['mpirun_extra_params'])
     calc.set_custom_scheduler_commands(params['custom_scheduler_commands'])
+    calc.label = calc_label
+    calc.description = calc_desc
 
     return calc
 
