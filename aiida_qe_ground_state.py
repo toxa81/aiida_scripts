@@ -1,8 +1,5 @@
 from aiida.orm.data.parameter import ParameterData
-#from aiida.orm import load_node, Code
 from aiida.orm.data.array.kpoints import KpointsData
-#from aiida.orm.group import Group
-#from math import *
 from aiida.common.example_helpers import test_and_get_code
 
 import calculation_helpers
