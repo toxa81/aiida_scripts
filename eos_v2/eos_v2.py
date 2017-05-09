@@ -3,7 +3,7 @@ import numpy
 import calculation_helpers
 from aiida.work.workchain import WorkChain
 from aiida.work.workfunction import workfunction
-from aiida.orm.data.base import Float, List, Int
+from aiida.orm.data.base import Float, List, Int, Str
 from aiida.orm.data.structure import StructureData
 from aiida.orm.data.parameter import ParameterData
 from aiida.orm.data.array.kpoints import KpointsData
@@ -20,9 +20,8 @@ def scaled_structure(structure, scale):
         new_structure.append_atom(position=numpy.array(site.position)*float(scale), \
                                   symbols=structure.get_kind(site.kind_name).symbol,\
                                   name=site.kind_name)
-    new_structure.label = 'created inside EOS run'
-    new_structure.description = "auxiliary structure for EOS "\
-                                "created from the original structure with PK=%i, "\
+    new_structure.label = 'auxiliary structure for EoS'
+    new_structure.description = "created from the original structure with PK=%i, "\
                                 "lattice constant scaling: %f"%(structure.pk, float(scale))
 
     return new_structure
@@ -77,14 +76,19 @@ class EoS(WorkChain):
 
     def submit_jobs(self):
         print("structure PK: %i"%self.inputs.structure.pk)
+
+        grp, created = Group.get_or_create(name=self.inputs.group)
+        grp.add_nodes([self.calc])
         
         # get calculation class
         C = CalculationFactory(self.inputs.code.get_input_plugin_name())
 
         Proc = C.process()
 
+        num_points = 7
+
         # volume scales from 0.94 to 1.06, alat scales as pow(1/3)
-        scales = numpy.linspace(0.979586108715562, 1.019612822422216, 1).tolist()
+        scales = numpy.linspace(0.979586108715562, 1.019612822422216, num_points).tolist()
 
         calcs = {}
         
@@ -123,9 +127,10 @@ class EoS(WorkChain):
             inputs.pseudo = get_pseudos(new_structure, 'GBRV_lda')
 
             future = submit(Proc, **inputs)
-            calcs["s_{}".format(scale)] = future
+            #calcs["s_{}".format(scale)] = future
+            #calcs["s_{}".format(scale)] = future
             
-        return ToContext(**calcs)
+        #return ToContext(**calcs)
     
     def post_process(self):
         return
@@ -137,14 +142,14 @@ class EoS(WorkChain):
 @click.command()
 @click.option('--structure_pk', type=int, help='PK of the structure', required=True)
 ##== @click.option('--atomic_files', type=str, help='label for the atomic files dataset', required=True)
-##== @click.option('--group', type=str, help='label of the EOS workflow group', required=True)
+@click.option('--group', type=str, help='label of the EOS workflow group', required=True)
 ##== @click.option('--partition', type=str, help='run on "cpu" or "gpu" partition', default='cpu')
 ##== @click.option('--ranks_per_node', type=int, help='number of ranks to put on a single node', default=36)
 ##== @click.option('--ranks_kp', type=int, help='number of ranks for k-point parallelization', default=1)
 ##== @click.option('--ranks_diag', type=int, help='number of ranks for band parallelization', default=36)
 ##== @click.option('--kmesh', type=(int, int, int), help='k-point grid', default=(4, 4, 4))
 #def run(structure_pk, atomic_files, group, partition, ranks_per_node, ranks_kp, ranks_diag, kmesh):
-def run(structure_pk):
+def run(structure_pk, group):
     #calculation_helpers.submit_eos(structure_pk=structure_pk,
     #                               atomic_files=atomic_files,
     #                               partition=partition,
@@ -162,8 +167,7 @@ def run(structure_pk):
     #print(CalculationFactory(code.get_input_plugin_name()))
 
     eos = EoS()
-    eos.run(structure=structure, code=code)
-    #print(eos.calc.pk)
+    eos.run(structure=structure, code=code, group=Str(group))
 
 if __name__ == "__main__":
     run()
