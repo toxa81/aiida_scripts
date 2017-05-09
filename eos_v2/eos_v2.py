@@ -79,6 +79,7 @@ class EoS(WorkChain):
 
         grp, created = Group.get_or_create(name=self.inputs.group)
         grp.add_nodes([self.calc])
+        print("EoS PK: %i"%self.calc.pk)
         
         # get calculation class
         C = CalculationFactory(self.inputs.code.get_input_plugin_name())
@@ -88,46 +89,39 @@ class EoS(WorkChain):
         num_points = 7
 
         # volume scales from 0.94 to 1.06, alat scales as pow(1/3)
-        scales = numpy.linspace(0.979586108715562, 1.019612822422216, num_points).tolist()
+        scales = numpy.linspace(0.94**(1/3.0), 1.06**(1/3.0), num_points).tolist()
 
         calcs = {}
         
         for scale in scales:
+            print("scale = %f"%scale)
             # scaled structure
             new_structure = scaled_structure(self.inputs.structure, Float(scale))
             # basic parameters of the calculation
-            params = calculation_helpers.create_calculation_parameters(self.inputs.code, 'cpu', 36, 1, 36)
-            #params['kpoints'].set_kpoints_mesh(kwargs.get('kmesh', [1, 1, 1]), offset=(0.0, 0.0, 0.0))
-            #params['kpoints'].set_kpoints_mesh([1,1,1], offset=(0.0, 0.0, 0.0))
-            #params['atomic_files'] = kwargs['atomic_files']
-            #params['atomic_files'] = 'GBRV_lda'
-            #params['calculation_wallclock_seconds'] = kwargs.get('time_limit', 3600)
-            #params['calculation_wallclock_seconds'] = 3600
-            #params['group'] = kwargs['group']
-            #params['kpoints'].store()
-            #params['calculation_parameters'].store()
-            #params['calculation_settings'].store()
-            #calculation_helpers.create_calculation(new_structure, params, 'label1', 'desc1')
+            params = calculation_helpers.create_calculation_parameters(self.inputs.code,
+                                                                       str(self.inputs.partition),
+                                                                       int(self.inputs.ranks_per_node),
+                                                                       int(self.inputs.ranks_kp),
+                                                                       int(self.inputs.ranks_diag))
             
             inputs = Proc.get_inputs_template()
             inputs.code = self.inputs.code
 
             inputs._options.resources = params['calculation_resources']
-            inputs._options.max_wallclock_seconds = 2 * 60
+            inputs._options.max_wallclock_seconds = 20 * 60
             inputs._options.custom_scheduler_commands = params['custom_scheduler_commands']
             inputs._options.environment_variables = params['environment_variables']
             inputs._options.mpirun_extra_params = params['mpirun_extra_params']
 
             inputs.structure = new_structure
             inputs.kpoints = KpointsData()
-            inputs.kpoints.set_kpoints_mesh([1, 1, 1], offset=(0.0, 0.0, 0.0))
+            inputs.kpoints.set_kpoints_mesh(self.inputs.kmesh, offset=(0.0, 0.0, 0.0))
 
             inputs.parameters = params['calculation_parameters']
             inputs.settings = params['calculation_settings']
-            inputs.pseudo = get_pseudos(new_structure, 'GBRV_lda')
+            inputs.pseudo = get_pseudos(new_structure, self.inputs.atomic_files)
 
             future = submit(Proc, **inputs)
-            #calcs["s_{}".format(scale)] = future
             #calcs["s_{}".format(scale)] = future
             
         #return ToContext(**calcs)
@@ -141,15 +135,14 @@ class EoS(WorkChain):
 
 @click.command()
 @click.option('--structure_pk', type=int, help='PK of the structure', required=True)
-##== @click.option('--atomic_files', type=str, help='label for the atomic files dataset', required=True)
-@click.option('--group', type=str, help='label of the EOS workflow group', required=True)
-##== @click.option('--partition', type=str, help='run on "cpu" or "gpu" partition', default='cpu')
-##== @click.option('--ranks_per_node', type=int, help='number of ranks to put on a single node', default=36)
-##== @click.option('--ranks_kp', type=int, help='number of ranks for k-point parallelization', default=1)
-##== @click.option('--ranks_diag', type=int, help='number of ranks for band parallelization', default=36)
-##== @click.option('--kmesh', type=(int, int, int), help='k-point grid', default=(4, 4, 4))
-#def run(structure_pk, atomic_files, group, partition, ranks_per_node, ranks_kp, ranks_diag, kmesh):
-def run(structure_pk, group):
+@click.option('--atomic_files', type=str, help='label for the atomic files dataset', required=True)
+@click.option('--group', type=str, help='label of the EoS workflow group', required=True)
+@click.option('--partition', type=str, help='run on "cpu" or "gpu" partition', default='cpu')
+@click.option('--ranks_per_node', type=int, help='number of ranks to put on a single node', default=36)
+@click.option('--ranks_kp', type=int, help='number of ranks for k-point parallelization', default=1)
+@click.option('--ranks_diag', type=int, help='number of ranks for band parallelization', default=36)
+@click.option('--kmesh', type=(int, int, int), help='k-point grid', default=(4, 4, 4))
+def run(structure_pk, atomic_files, group, partition, ranks_per_node, ranks_kp, ranks_diag, kmesh):
     #calculation_helpers.submit_eos(structure_pk=structure_pk,
     #                               atomic_files=atomic_files,
     #                               partition=partition,
@@ -164,10 +157,18 @@ def run(structure_pk, group):
 
     # load code from label@computer
     code = Code.get_from_string('pw.sirius.x@piz_daint')
-    #print(CalculationFactory(code.get_input_plugin_name()))
-
+    k = List()
+    k.extend(kmesh)
     eos = EoS()
-    eos.run(structure=structure, code=code, group=Str(group))
+    eos.run(structure=structure,
+            code=code,
+            atomic_files=Str(atomic_files),
+            group=Str(group),
+            kmesh=k,
+            partition=Str(partition),
+            ranks_per_node=Int(ranks_per_node),
+            ranks_kp=Int(ranks_kp),
+            ranks_diag=Int(ranks_diag))
 
 if __name__ == "__main__":
     run()

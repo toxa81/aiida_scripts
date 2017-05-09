@@ -7,6 +7,8 @@ def add_to_plot(p, eos_pk, zero, do_fit):
     n = load_node(eos_pk)
     structure = n.get_inputs_dict()['structure']
     code = n.get_inputs_dict()['code']
+    partition = n.get_inputs_dict()['partition']
+
     num_atoms = len(structure.sites)
     print("structure: %s, number of atoms: %i"%(structure.get_formula(), len(structure.sites)))
 
@@ -14,6 +16,7 @@ def add_to_plot(p, eos_pk, zero, do_fit):
     y = []
     for e in n.get_outputs():
         if isinstance(e, JobCalculation):
+            print("calculation PK: %i"%e.pk)
             V = e.res.volume
             E = e.res.energy
             Eha = e.res.energy_hartree
@@ -48,7 +51,7 @@ def add_to_plot(p, eos_pk, zero, do_fit):
     
     new_x = np.arange(V0, V1, 0.01)
     
-    label = 'raw ' + code.label + " (EoS PK=%i)"%eos_pk
+    label = 'raw ' + code.label + " (EoS PK=%i, %s partition)"%(eos_pk, str(partition))
     p.plot(x, y, "o", linewidth = 2.0, label=label)
     if not do_fit:
         p.plot(x, y, linewidth = 2.0)
@@ -56,7 +59,7 @@ def add_to_plot(p, eos_pk, zero, do_fit):
     #plt.plot(x, y, linewidth = 2.0, label=label)
     
     if do_fit:
-        label = 'fit ' + code.label + " (EoS PK=%i)"%eos_pk
+        label = 'fit ' + code.label + " (EoS PK=%i, %s partition)"%(eos_pk, str(partition))
         p.plot(new_x, mod_eos.birch_murnaghan(new_x, *fit_params),label=label)
 
     return structure

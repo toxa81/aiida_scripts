@@ -56,6 +56,7 @@ def create_calculation_parameters(code, partition, num_ranks_per_node, num_ranks
         if partition == 'gpu':
             settings = ParameterData(dict={
                 'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag), '-sirius', '-sirius_cfg', '/users/antonk/codes/config.json']})
+                #'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag), '-sirius']})
             
         parameters = ParameterData(dict={
             'CONTROL': {
@@ -64,8 +65,8 @@ def create_calculation_parameters(code, partition, num_ranks_per_node, num_ranks
                 'disk_io'      : 'none'
                 },
             'SYSTEM': {
-                'ecutwfc': 30.,
-                'ecutrho': 300.,
+                'ecutwfc': 60.,
+                'ecutrho': 800.,
                 #'nbnd': 40,
                 'occupations': 'smearing',
                 'smearing': 'gauss',
