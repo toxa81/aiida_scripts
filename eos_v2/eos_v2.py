@@ -26,13 +26,6 @@ def scaled_structure(structure, scale):
 
     return new_structure
 
-#def rescale_structure(structure, scale):
-#    the_ase = structure.get_ase()
-#    new_ase = the_ase.copy()
-#    new_ase.set_cell(the_ase.get_cell() * float(scale), scale_atoms=True)
-#    new_structure = DataFactory('structure')(ase=new_ase)
-#    return new_structure
-
 def get_pseudos(structure, family_name):
     """
     Set the pseudo to use for all atomic kinds, picking pseudos from the
@@ -67,6 +60,24 @@ def get_pseudos(structure, family_name):
 
     return pseudos
 
+def get_lapwbasis(structure, family_name):
+    lapw_files = {}
+    for symb in structure.get_kind_names():
+        lapw_files[symb] = None
+
+    LapwbasisData = DataFactory('exciting.lapwbasis')
+    group = LapwbasisData.get_lapwbasis_group(family_name)
+    
+    sp = LapwbasisData.query(dbgroups=group.dbgroup).distinct()
+    for s in sp:
+        if s.chemical_symbol in lapw_files.keys():
+            lapw_files[s.chemical_symbol] = s
+
+    for k,v in lapw_files.iteritems():
+        if not v:
+            raise RuntimeError("species file for element %s is not found"%k)
+
+    return lapw_files
     
 class EoS(WorkChain):
     @classmethod
@@ -119,7 +130,12 @@ class EoS(WorkChain):
 
             inputs.parameters = params['calculation_parameters']
             inputs.settings = params['calculation_settings']
-            inputs.pseudo = get_pseudos(new_structure, self.inputs.atomic_files)
+
+            if self.inputs.code.get_input_plugin_name() == 'quantumespresso.pw':
+                inputs.pseudo = get_pseudos(new_structure, self.inputs.atomic_files)
+
+            if self.inputs.code.get_input_plugin_name() == 'exciting.exciting':
+                inputs.lapwbasis = get_lapwbasis(new_structure, self.inputs.atomic_files)
 
             future = submit(Proc, **inputs)
             #calcs["s_{}".format(scale)] = future
@@ -134,41 +150,42 @@ class EoS(WorkChain):
         #            label, self.ctx[label]['output_parameters'].dict.energy)
 
 @click.command()
-@click.option('--structure_pk', type=int, help='PK of the structure', required=True)
-@click.option('--atomic_files', type=str, help='label for the atomic files dataset', required=True)
+@click.argument('structure_pk', type=int, required=True, nargs=-1)
+@click.option('--code', type=str, help='code label', required=True)
+@click.option('--atomic_files', type=str, help='label for the atomic files dataset', required=False)
 @click.option('--group', type=str, help='label of the EoS workflow group', required=True)
 @click.option('--partition', type=str, help='run on "cpu" or "gpu" partition', default='cpu')
 @click.option('--ranks_per_node', type=int, help='number of ranks to put on a single node', default=36)
 @click.option('--ranks_kp', type=int, help='number of ranks for k-point parallelization', default=1)
 @click.option('--ranks_diag', type=int, help='number of ranks for band parallelization', default=36)
 @click.option('--kmesh', type=(int, int, int), help='k-point grid', default=(4, 4, 4))
-def run(structure_pk, atomic_files, group, partition, ranks_per_node, ranks_kp, ranks_diag, kmesh):
-    #calculation_helpers.submit_eos(structure_pk=structure_pk,
-    #                               atomic_files=atomic_files,
-    #                               partition=partition,
-    #                               num_ranks_per_node=ranks_per_node,
-    #                               num_ranks_kp=ranks_kp,
-    #                               num_ranks_diag=ranks_diag,
-    #                               kmesh=kmesh,
-    #                               group=group)
-
-    # load structure from PK
-    structure = load_node(structure_pk)
+def run(structure_pk, code, atomic_files, group, partition, ranks_per_node, ranks_kp, ranks_diag, kmesh):
 
     # load code from label@computer
-    code = Code.get_from_string('pw.sirius.x@piz_daint')
+    c = Code.get_from_string(code)
+    if not atomic_files:
+        if c.get_input_plugin_name() == 'quantumespresso.pw':
+            atomic_files = 'SSSP_acc_PBE_fixed'
+        if c.get_input_plugin_name() == 'exciting.exciting':
+            atomic_files = 'lapw_v1'
+
+    # create k-point mesh
     k = List()
     k.extend(kmesh)
-    eos = EoS()
-    eos.run(structure=structure,
-            code=code,
-            atomic_files=Str(atomic_files),
-            group=Str(group),
-            kmesh=k,
-            partition=Str(partition),
-            ranks_per_node=Int(ranks_per_node),
-            ranks_kp=Int(ranks_kp),
-            ranks_diag=Int(ranks_diag))
+    for spk in structure_pk:
+        # load structure from PK
+        structure = load_node(spk)
+        # create EoS workflow
+        eos = EoS()
+        eos.run(structure=structure,
+                code=c,
+                atomic_files=Str(atomic_files),
+                group=Str(group),
+                kmesh=k,
+                partition=Str(partition),
+                ranks_per_node=Int(ranks_per_node),
+                ranks_kp=Int(ranks_kp),
+                ranks_diag=Int(ranks_diag))
 
 if __name__ == "__main__":
     run()

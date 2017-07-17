@@ -55,8 +55,8 @@ def create_calculation_parameters(code, partition, num_ranks_per_node, num_ranks
                 'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag)]})
         if partition == 'gpu':
             settings = ParameterData(dict={
-                'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag), '-sirius', '-sirius_cfg', '/users/antonk/codes/config.json']})
-                #'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag), '-sirius']})
+                #'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag), '-sirius', '-sirius_cfg', '/users/antonk/codes/config.json']})
+                'CMDLINE' : ['-npool', str(num_ranks_kp), '-ndiag', str(num_ranks_diag), '-sirius']})
             
         parameters = ParameterData(dict={
             'CONTROL': {
@@ -65,18 +65,33 @@ def create_calculation_parameters(code, partition, num_ranks_per_node, num_ranks
                 'disk_io'      : 'none'
                 },
             'SYSTEM': {
-                'ecutwfc': 60.,
-                'ecutrho': 800.,
+                'ecutwfc': 80.,
+                'ecutrho': 1200.,
                 #'nbnd': 40,
                 'occupations': 'smearing',
                 'smearing': 'gauss',
-                'degauss': 0.01
+                'degauss': 0.1
                 },
             'ELECTRONS': {
                 'conv_thr': 1.e-9,
                 'electron_maxstep': 100,
                 'mixing_beta': 0.7
                 }})
+
+    if code.get_input_plugin_name() == 'exciting.exciting':
+        parameters = ParameterData(dict={'groundstate' : {'xctype' : 'GGA_PBE',
+                                         'swidth' : '0.001',
+                                         'beta0'  : '0.4',
+                                         'gmaxvr' : '20.0',
+                                         'rgkmax' : '7.0',
+                                         'lmaxmat' : '10',
+                                         'lmaxapw' : '10',
+                                         'lmaxvr'  : '10',
+                                         'fracinr' : '1d-12',
+                                         'maxscl'  : '40',
+                                         'nempty'  : '10'}})
+        settings = ParameterData(dict={})
+
 
     params['calculation_settings'] = settings
     params['calculation_parameters'] = parameters

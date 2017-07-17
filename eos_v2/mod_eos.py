@@ -41,12 +41,15 @@ def fit_birch_murnaghan_params(volumes, energies):
 
     #    b01 += 0.1
     #    if b01 > 10: break
-
-    params, covariance = curve_fit(birch_murnaghan, xdata=x, ydata=y,
-                                   p0=(y.min(), x.mean(), 0.0, 0.0),
-                                   sigma=None)
     
-    return params, covariance
+    try:
+        params, covariance = curve_fit(birch_murnaghan, xdata=x, ydata=y,
+                                       p0=(y.min(), x.mean(), 0.0, 0.0),
+                                       sigma=None)
+        return params
+    except:
+        print("fit_birch_murnaghan_params: failed")
+        return None
 
 def deltaE2(V, params1, params2):
     return (birch_murnaghan(V, *params1) - birch_murnaghan(V, *params2))**2
